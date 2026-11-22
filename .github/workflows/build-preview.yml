@@ -29,7 +29,7 @@ jobs:
         shell: pwsh
         run: |
           $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
-          & $csc /nologo /target:exe /out:bin/Release/DropdownDismissalSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Tests/DropdownDismissalSmoke.cs
+          & $csc /nologo /target:exe /out:bin/Release/DropdownDismissalSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll './Tests\DropdownDismissalSmoke.cs'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./bin/Release/DropdownDismissalSmoke.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
