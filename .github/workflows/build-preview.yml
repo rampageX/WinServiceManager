@@ -33,6 +33,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./bin/Release/DropdownDismissalSmoke.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Regression - startup list paints once with double buffering
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
+          & $csc /nologo /target:exe /out:bin/Release/StartupGridSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.ServiceProcess.dll './Tests\StartupGridSmoke.cs'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./bin/Release/StartupGridSmoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify EXE icon and Explorer version metadata
         shell: pwsh
         run: |

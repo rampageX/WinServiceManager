@@ -22,18 +22,22 @@ namespace WinServMgr
         private bool sortDescending;
         private Label countLabel;
         private Button refreshButton;
+        private Label loadingPlaceholder;
+        private Task<List<ServiceEntry>> initialScanTask;
         private readonly ContextMenuStrip serviceContextMenu = DarkTheme.CreateMenu();
         private string contextServiceName;
 
         public MainForm()
         {
             InitializeComponent();
+            // Overlap the first SCM enumeration with form/control construction.
+            initialScanTask = Task.Run(() => SrvController.Enumerate());
             InitializeModernLayout();
             ConfigureGrid();
             ConfigureServiceContextMenu();
             Disposed += (sender, args) => serviceContextMenu.Dispose();
             binding.DataSource = visibleServices;
-            dgvServicesList.DataSource = binding;
+            // Do not bind or paint an empty grid before the first snapshot arrives.
             DarkTheme.Apply(this);
             // SCM calls are relatively costly; a worker scans at most once per 2.5s.
             tmrRefreshGrid.Interval = 2500;
@@ -134,8 +138,20 @@ namespace WinServMgr
             footer.Controls.Add(btnStopService, 2, 0);
             footer.Controls.Add(btnRestartService, 3, 0);
 
+            var listHost = new Panel {
+                Dock = DockStyle.Fill, BackColor = DarkTheme.Input,
+                Margin = Padding.Empty
+            };
+            loadingPlaceholder = new Label {
+                Name = "lblLoading", Text = "正在读取 Windows 服务…",
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = DarkTheme.Input, ForeColor = DarkTheme.Muted
+            };
+            dgvServicesList.Visible = false;
+            listHost.Controls.Add(dgvServicesList);
+            listHost.Controls.Add(loadingPlaceholder);
             root.Controls.Add(toolbar, 0, 0);
-            root.Controls.Add(dgvServicesList, 0, 1);
+            root.Controls.Add(listHost, 0, 1);
             root.Controls.Add(footer, 0, 2);
             Controls.Add(root);
 
@@ -216,18 +232,29 @@ namespace WinServMgr
             refreshButton.Enabled = false;
             try
             {
-                var services = await Task.Run(() => SrvController.Enumerate());
+                // The first scan starts during construction, before Form.Load.
+                var scan = initialScanTask;
+                initialScanTask = null;
+                var services = await (scan ?? Task.Run(() => SrvController.Enumerate()));
                 if (!IsDisposed && !Disposing)
                 {
                     ApplySnapshot(services);
-                    firstScan = false;
+                    if (firstScan)
+                    {
+                        RevealFirstSnapshot();
+                        firstScan = false;
+                    }
                 }
             }
             catch (Exception ex)
             {
                 if (!IsDisposed && !Disposing)
                 {
-                    if (firstScan) DarkTheme.ShowError(this, "无法读取 Windows 服务：\r\n" + ex.Message);
+                    if (firstScan)
+                    {
+                        loadingPlaceholder.Text = "加载失败，请点击“刷新 (F5)”重试";
+                        DarkTheme.ShowError(this, "无法读取 Windows 服务：\r\n" + ex.Message);
+                    }
                     else countLabel.Text = "刷新失败：" + ex.Message;
                 }
             }
@@ -235,6 +262,28 @@ namespace WinServMgr
             {
                 refreshBusy = false;
                 if (!IsDisposed && !Disposing) { refreshButton.Enabled = true; UpdateCountLabel(); }
+            }
+        }
+
+        private void RevealFirstSnapshot()
+        {
+            // One initial data binding while the grid is hidden: the first
+            // visible frame already has its complete rows, column widths and styles.
+            var host = dgvServicesList.Parent;
+            host.SuspendLayout();
+            dgvServicesList.SuspendLayout();
+            try
+            {
+                dgvServicesList.DataSource = binding;
+                dgvServicesList.CurrentCell = null;
+                dgvServicesList.ClearSelection();
+                loadingPlaceholder.Visible = false;
+                dgvServicesList.Visible = true;
+            }
+            finally
+            {
+                dgvServicesList.ResumeLayout(false);
+                host.ResumeLayout(true);
             }
         }
 
@@ -341,12 +390,16 @@ namespace WinServMgr
                 visibleServices.SequenceEqual(target))
                 return;
 
-            var selected = new HashSet<string>(GetSelectedServices(), StringComparer.OrdinalIgnoreCase);
-            string currentName = (dgvServicesList.CurrentRow == null ? null
-                : (dgvServicesList.CurrentRow.DataBoundItem as ServiceEntry)?.ServiceName);
+            // The initial list is still unbound/hidden, so don't walk grid rows.
+            var selected = firstScan
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(GetSelectedServices(), StringComparer.OrdinalIgnoreCase);
+            string currentName = firstScan || dgvServicesList.CurrentRow == null ? null
+                : (dgvServicesList.CurrentRow.DataBoundItem as ServiceEntry)?.ServiceName;
             int firstRow = -1;
-            try { firstRow = dgvServicesList.FirstDisplayedScrollingRowIndex; }
-            catch (InvalidOperationException) { }
+            if (!firstScan)
+                try { firstRow = dgvServicesList.FirstDisplayedScrollingRowIndex; }
+                catch (InvalidOperationException) { }
 
             visibleServices.RaiseListChangedEvents = false;
             try
@@ -360,6 +413,7 @@ namespace WinServMgr
                 binding.ResetBindings(false);
             }
 
+            if (firstScan) return; // No selection/scroll history to restore.
             dgvServicesList.ClearSelection();
             DataGridViewRow currentRow = null;
             foreach (DataGridViewRow row in dgvServicesList.Rows)

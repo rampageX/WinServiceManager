@@ -53,6 +53,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DarkTheme.cs" />
+    <Compile Include="BufferedDataGridView.cs" />
     <Compile Include="DarkStartupDropdown.cs" />
     <Compile Include="ServiceConfiguration.cs" />
     <Compile Include="ServiceDetailsForm.cs" />
