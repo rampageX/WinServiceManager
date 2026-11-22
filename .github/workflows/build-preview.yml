@@ -25,6 +25,14 @@ jobs:
           msbuild WinServiceManager.sln /m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:WarningLevel=4 /verbosity:minimal
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Test-Path 'bin/Release/WinServiceManager.exe')) { throw 'Missing executable' }
+      - name: Regression - dismiss dark dropdown without crashing
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
+          & $csc /nologo /target:exe /out:bin/Release/DropdownDismissalSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll Tests/DropdownDismissalSmoke.cs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./bin/Release/DropdownDismissalSmoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package portable preview
         shell: pwsh
         run: |

@@ -22,12 +22,16 @@ namespace WinServMgr
         private bool sortDescending;
         private Label countLabel;
         private Button refreshButton;
+        private readonly ContextMenuStrip serviceContextMenu = DarkTheme.CreateMenu();
+        private string contextServiceName;
 
         public MainForm()
         {
             InitializeComponent();
             InitializeModernLayout();
             ConfigureGrid();
+            ConfigureServiceContextMenu();
+            Disposed += (sender, args) => serviceContextMenu.Dispose();
             binding.DataSource = visibleServices;
             dgvServicesList.DataSource = binding;
             DarkTheme.Apply(this);
@@ -436,6 +440,19 @@ namespace WinServMgr
             if (entry != null) new ServiceDetailsForm(entry.ServiceName).Show(this);
         }
 
+        private void ConfigureServiceContextMenu()
+        {
+            serviceContextMenu.Items.Add("查看详情", null, (sender, args) =>
+            {
+                if (!string.IsNullOrEmpty(contextServiceName))
+                    new ServiceDetailsForm(contextServiceName).Show(this);
+            });
+            serviceContextMenu.Items.Add(new ToolStripSeparator());
+            serviceContextMenu.Items.Add("启动", null, btnStartService_Click);
+            serviceContextMenu.Items.Add("停止", null, btnStopService_Click);
+            serviceContextMenu.Items.Add("重启", null, btnRestartService_Click);
+        }
+
         private void dgvServicesList_CellMouseClick(object sender, DataGridViewCellMouseEventArgs e)
         {
             if (e.Button != MouseButtons.Right || e.RowIndex < 0 || e.ColumnIndex < 0) return;
@@ -451,17 +468,15 @@ namespace WinServMgr
             var entry = row.DataBoundItem as ServiceEntry;
             if (entry == null) return;
 
-            var menu = DarkTheme.CreateMenu();
-            menu.Items.Add("查看详情", null, (s, args) => new ServiceDetailsForm(entry.ServiceName).Show(this));
-            menu.Items.Add(new ToolStripSeparator());
-            var start = menu.Items.Add("启动", null, (s, args) => btnStartService_Click(s, args));
-            start.Enabled = !operationBusy && entry.ServiceState == ServiceControllerStatus.Stopped;
-            var stop = menu.Items.Add("停止", null, (s, args) => btnStopService_Click(s, args));
-            stop.Enabled = !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
-            var restart = menu.Items.Add("重启", null, (s, args) => btnRestartService_Click(s, args));
-            restart.Enabled = !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
-            menu.Closed += (s, args) => menu.Dispose();
-            menu.Show(dgvServicesList, dgvServicesList.PointToClient(Cursor.Position));
+            contextServiceName = entry.ServiceName;
+            // The same form-owned menu is reused. No disposal from Closed.
+            serviceContextMenu.Items[2].Enabled =
+                !operationBusy && entry.ServiceState == ServiceControllerStatus.Stopped;
+            serviceContextMenu.Items[3].Enabled =
+                !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
+            serviceContextMenu.Items[4].Enabled =
+                !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
+            serviceContextMenu.Show(dgvServicesList, dgvServicesList.PointToClient(Cursor.Position));
         }
 
         private async Task RunForSelectedAsync(Action<ServiceController> action)

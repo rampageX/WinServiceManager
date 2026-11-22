@@ -93,23 +93,45 @@ namespace WinServMgr
             base.OnKeyDown(e);
         }
 
+        // A single menu belongs to this control. Never dispose it in Closed:
+        // WinForms ModalMenuFilter still touches it after the Closed callback
+        // when clicking outside, otherwise ObjectDisposedException terminates UI.
+        private ContextMenuStrip dropdownMenu;
+
         private void OpenMenu()
         {
-            if (!Enabled || IsDisposed) return;
-            ContextMenuStrip menu = DarkTheme.CreateMenu();
-            menu.ShowImageMargin = false;
-            menu.MinimumSize = new Size(Width, 0);
-            foreach (string mode in Modes)
+            if (!Enabled || IsDisposed || Disposing) return;
+
+            if (dropdownMenu == null)
             {
-                var item = new ToolStripMenuItem(mode) {
-                    Checked = mode == SelectedText,
-                    AutoSize = true
-                };
-                item.Click += (sender, args) => SelectedText = mode;
-                menu.Items.Add(item);
+                dropdownMenu = DarkTheme.CreateMenu();
+                dropdownMenu.ShowImageMargin = false;
+                foreach (string mode in Modes)
+                {
+                    string capturedMode = mode;
+                    var item = new ToolStripMenuItem(mode) { AutoSize = true };
+                    item.Click += (sender, args) => SelectedText = capturedMode;
+                    dropdownMenu.Items.Add(item);
+                }
             }
-            menu.Closed += (sender, args) => menu.Dispose();
-            menu.Show(this, new Point(0, Height));
+
+            dropdownMenu.MinimumSize = new Size(Width, 0);
+            foreach (ToolStripMenuItem item in dropdownMenu.Items)
+                item.Checked = string.Equals(item.Text, SelectedText, StringComparison.Ordinal);
+
+            if (!dropdownMenu.Visible)
+                dropdownMenu.Show(this, new Point(0, Height));
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && dropdownMenu != null)
+            {
+                // The owner is being destroyed, not a popup-close notification.
+                dropdownMenu.Dispose();
+                dropdownMenu = null;
+            }
+            base.Dispose(disposing);
         }
     }
 
