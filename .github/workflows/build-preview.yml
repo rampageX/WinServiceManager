@@ -1,0 +1,72 @@
+name: Build WinServiceManager preview
+
+on:
+  push:
+    branches:
+      - feature/dark-ui-service-details
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable MSBuild
+        uses: microsoft/setup-msbuild@v2
+      - name: Compile Release
+        shell: pwsh
+        run: |
+          msbuild WinServiceManager.sln /m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:WarningLevel=4 /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'bin/Release/WinServiceManager.exe')) { throw 'Missing executable' }
+      - name: Regression - dismiss dark dropdown without crashing
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
+          & $csc /nologo /target:exe /out:bin/Release/DropdownDismissalSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll './Tests\DropdownDismissalSmoke.cs'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./bin/Release/DropdownDismissalSmoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Regression - startup list paints once with double buffering
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
+          & $csc /nologo /target:exe /out:bin/Release/StartupGridSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.ServiceProcess.dll './Tests\StartupGridSmoke.cs'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./bin/Release/StartupGridSmoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify EXE icon and Explorer version metadata
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'bin/Release/WinServiceManager.exe').Path
+          $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+          if ($version.FileVersion -ne '1.1.1.0') { throw "Unexpected file version: $($version.FileVersion)" }
+          if ($version.ProductVersion -ne '1.1.1') { throw "Unexpected product version: $($version.ProductVersion)" }
+          if ($version.FileDescription -ne 'WinServiceManager') { throw "Unexpected description: $($version.FileDescription)" }
+          if ($version.CompanyName -ne 'rampageX') { throw "Unexpected company: $($version.CompanyName)" }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if ($null -eq $icon -or $icon.Width -le 0) { throw 'EXE icon resource missing' }
+          $icon.Dispose()
+          Write-Host "Explorer metadata OK: $($version.FileDescription) / $($version.FileVersion) / $($version.ProductVersion)"
+          Write-Host 'EXE icon resource OK'
+      - name: Package portable preview
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item 'bin/Release/WinServiceManager.exe' dist/
+          Copy-Item 'LICENSE' dist/
+          Copy-Item 'README.md' dist/
+          Get-FileHash 'dist/WinServiceManager.exe' -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinServiceManager-Dark-Preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

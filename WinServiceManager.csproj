@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>WinServMgr</RootNamespace>
     <AssemblyName>WinServiceManager</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>SAK</SccProjectName>
     <SccLocalPath>SAK</SccLocalPath>
@@ -52,6 +52,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DarkTheme.cs" />
+    <Compile Include="BufferedDataGridView.cs" />
+    <Compile Include="DarkStartupDropdown.cs" />
+    <Compile Include="ServiceConfiguration.cs" />
+    <Compile Include="ServiceDetailsForm.cs" />
     <Compile Include="ServiceEntry.cs" />
     <Compile Include="SrvController.cs" />
     <Compile Include="WinServiceManager.cs">

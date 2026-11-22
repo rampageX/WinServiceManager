@@ -30,7 +30,7 @@
         {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
-            this.dgvServicesList = new System.Windows.Forms.DataGridView();
+            this.dgvServicesList = new WinServMgr.BufferedDataGridView();
             this.btnStopService = new System.Windows.Forms.Button();
             this.txtFilter = new System.Windows.Forms.TextBox();
             this.btnStartService = new System.Windows.Forms.Button();
@@ -113,7 +113,7 @@
             // 
             // tmrRefreshGrid
             // 
-            this.tmrRefreshGrid.Interval = 200;
+            this.tmrRefreshGrid.Interval = 2500;
             this.tmrRefreshGrid.Tick += new System.EventHandler(this.tmrRefreshGrid_Tick);
             // 
             // MainForm
