@@ -113,7 +113,7 @@
             // 
             // tmrRefreshGrid
             // 
-            this.tmrRefreshGrid.Interval = 200;
+            this.tmrRefreshGrid.Interval = 2500;
             this.tmrRefreshGrid.Tick += new System.EventHandler(this.tmrRefreshGrid_Tick);
             // 
             // MainForm

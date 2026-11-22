@@ -1,73 +1,55 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.ServiceProcess;
+using System.Threading.Tasks;
 
 namespace WinServMgr
 {
-    public class SrvController
+    internal static class SrvController
     {
-        private MainForm mMainForm;
-        private object mSrvControllerLock = new object();
-
-        public SrvController(MainForm mainForm)
+        // Run this on a worker thread, never inside a WinForms timer event.
+        internal static List<ServiceEntry> Enumerate()
         {
-            ServiceEntries = new List<ServiceEntry>();
-            mMainForm = mainForm;
-        }
-
-        public List<ServiceEntry> ServiceEntries { get; set; }
-
-        /// <summary>
-        /// Gets the current status of services from the system.
-        /// </summary>
-        public void UpdateServiceEntries()
-        {
-            lock (mSrvControllerLock)
+            var result = new List<ServiceEntry>();
+            foreach (var sc in ServiceController.GetServices())
             {
-                ServiceEntries.ForEach(se => se.StateChanged = false);
-                var newServicesEntries = ServiceController.GetServices().Select(sc => new ServiceEntry(sc.ServiceName, sc.Status)).ToList();
-
-                foreach (ServiceEntry se in ServiceEntries)
+                using (sc)
                 {
-                    int index = newServicesEntries.IndexOf(se);
-                    if (index >= 0 && newServicesEntries[index].ServiceState != se.ServiceState)
+                    try
                     {
-                        se.ServiceState = newServicesEntries[index].ServiceState;
-                        se.StateChanged = true;
+                        result.Add(new ServiceEntry(sc.ServiceName, sc.DisplayName, sc.Status));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Services may disappear during enumeration.
                     }
                 }
-
-                ServiceEntries.AddRange(newServicesEntries.Except(ServiceEntries));
-                ServiceEntries.RemoveAll(se => !newServicesEntries.Contains(se));
             }
+            return result;
         }
 
-        /// <summary>
-        /// Performs the specified action for selected service
-        /// </summary>
-        /// <param name="action">Action that needs to be done with service which name is an input param</param>
-        /// <param name="actionName">User-friendly name of the action (for error message)</param>
-        public void PerformForSelected(Action<string> action, string actionName)
+        internal static Task PerformAsync(IEnumerable<string> names, Action<ServiceController> action)
         {
-            Task task = new Task(() =>
+            var targets = names.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            return Task.Run(() =>
             {
-                List<string> serviceNames = mMainForm.GetSelectedServices();
-                serviceNames.AsParallel().ForAll(name =>
+                var errors = new System.Collections.Concurrent.ConcurrentBag<string>();
+                Parallel.ForEach(targets,
+                    new ParallelOptions { MaxDegreeOfParallelism = 4 }, name =>
+                {
+                    try
                     {
-                        try
-                        {
-                            action(name);
-                        }
-                        catch (Exception ex)
-                        {
-                            MainForm.ShowError(string.Format("Exception caught while performing {0} of {1}:\n{2}", actionName, name, ex.Message));
-                        }
-                    });
+                        using (var sc = new ServiceController(name)) action(sc);
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add(name + ": " + ex.Message);
+                    }
+                });
+                if (!errors.IsEmpty)
+                    throw new AggregateException("以下服务操作失败：\r\n" + string.Join("\r\n", errors));
             });
-            task.Start();
         }
     }
 }

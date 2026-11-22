@@ -1,27 +1,30 @@
-##WinServiceManager
-#####A tool to manage Windows services in a user-friendly way
+# WinServiceManager
 
-The standard Windows console services.msc is not convenient for dealing with services. 
-The common way to restart a service is to right-click the service row in the console and select a menu item; 
-if you need to restart many services, is might be time-consuming.
+轻量 Windows 服务管理器，基于 .NET Framework 4.8 / WinForms，无第三方 UI 依赖。
 
-WinServiceManager helps to avoid this difficulties.
+## 本版功能（v1.1 预览）
 
-###Features
-* stop / start / restart a service in one click
-* show service states with color
-* restart several services at once
-* quickly find a service by its name
-* filter out stopped services
+- 参考 Film Grain Studio 配色的全暗黑界面（包含 Windows 10/11 深色标题栏、列表和右键菜单）
+- 同时显示服务名称、显示名称、状态
+- 点击任意列标题切换升序/降序；刷新后保留排序、多选与滚动位置
+- 双击服务或右键“查看详情”，查看描述、启动类型、可执行路径、登录账户、依赖关系等只读资料
+- 按名称或显示名称进行包含匹配；可隐藏已停止的服务
+- 批量启动、停止、重启；服务操作后台执行
+- 服务扫描移至后台线程，每 2.5 秒自动刷新；只重绘有变化的行
+- F5 刷新，Ctrl+F 聚焦搜索框
 
-###Installation
-The recent stable version of WinServiceManager can be compiled from source.  
-The tool is portable --- just copy it to any directory and launch .exe file.
+## 运行
 
-Windows Service Manager requires .NET Framework 4.5 or higher installed on your Windows machine.  
-Your account must have Windows administrative privileges to manipulate service states.
+Windows 10 / 11，已安装 .NET Framework 4.8。
 
-###What's next
-Currently, state of the services is not automatically updated. 
-You need to press "Refresh" button or F5 to acknowledge the actual state.  
-Auto-update is going to be supported in one of next releases.
+查看服务无需管理员权限。启动、停止、重启服务可能需要以管理员身份运行。
+
+从 Actions 中下载 **WinServiceManager-Dark-Preview** 构建产物，解压运行 WinServiceManager.exe。
+
+## 源码构建
+
+Visual Studio 2022（安装 .NET 桌面开发工作负载及 .NET Framework 4.8 targeting pack），打开 WinServiceManager.sln，选择 Release / Any CPU 编译。
+
+## 兼容说明
+
+原始项目目标框架为 .NET Framework 4.5，本次升级至 4.8，以匹配当前 Windows 10/11 桌面使用场景。正式发布前请先做 Win11 实机外观及服务操作验收。

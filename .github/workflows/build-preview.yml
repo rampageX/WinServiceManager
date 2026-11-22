@@ -1,0 +1,42 @@
+name: Build WinServiceManager preview
+
+on:
+  push:
+    branches:
+      - feature/dark-ui-service-details
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable MSBuild
+        uses: microsoft/setup-msbuild@v2
+      - name: Compile Release
+        shell: pwsh
+        run: |
+          msbuild WinServiceManager.sln /m /t:Rebuild /p:Configuration=Release /p:Platform="Any CPU" /p:WarningLevel=4 /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'bin/Release/WinServiceManager.exe')) { throw 'Missing executable' }
+      - name: Package portable preview
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item 'bin/Release/WinServiceManager.exe' dist/
+          Copy-Item 'LICENSE' dist/
+          Copy-Item 'README.md' dist/
+          Compress-Archive -Path dist/* -DestinationPath 'WinServiceManager_DarkPreview.zip' -Force
+          Get-FileHash 'WinServiceManager_DarkPreview.zip' -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WinServiceManager-Dark-Preview
+          path: WinServiceManager_DarkPreview.zip
+          if-no-files-found: error
+          retention-days: 14
