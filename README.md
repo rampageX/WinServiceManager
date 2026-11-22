@@ -2,7 +2,7 @@
 
 轻量 Windows 服务管理器，基于 .NET Framework 4.8 / WinForms，无第三方 UI 依赖。
 
-## 本版功能（v1.1 预览）
+## v1.1.1 正式版功能
 
 - 参考 Film Grain Studio 配色的全暗黑界面（包含 Windows 10/11 深色标题栏、列表和右键菜单）
 - 同时显示服务名称、显示名称、状态
@@ -34,7 +34,7 @@
 
 - 服务详情窗口在主窗口**右半区域**居中打开，并限制在主窗口所在显示器的工作区域内（多显示器可用），不再默认靠左。
 - EXE 的原有 `icon.ico` 与主窗口内嵌资源图标逐字节一致；详情页使用主窗口图标的独立副本。
-- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.1.0、产品版本 1.1.1-preview、公司 rampageX。
+- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.1.0、产品版本 1.1.1、公司 rampageX。
 
 ## 运行
 
@@ -44,7 +44,7 @@ Windows 10 / 11，已安装 .NET Framework 4.8。
 
 服务配置变更通过 Windows 服务控制管理器的 ChangeServiceConfigW / ChangeServiceConfig2W 完成，不直接改注册表。关闭或取消详情窗口不写入更改。修改启动类型不会立即停止或启动运行中的服务；带依赖关系的系统服务不要随意禁用。延迟自动启动由两次 SCM 调用配置，第二步若失败会明确报告，需重新进入详情核对实际配置。
 
-从 Actions 中下载 **WinServiceManager-Dark-Preview** 构建产物，解压运行 WinServiceManager.exe。
+从 [GitHub Releases](https://github.com/rampageX/WinServiceManager/releases) 下载 `WinServiceManager_v1.1.1_Stable.zip`，解压运行 `WinServiceManager.exe`。
 
 ## 源码构建
 
@@ -52,4 +52,4 @@ Visual Studio 2022（安装 .NET 桌面开发工作负载及 .NET Framework 4.8 
 
 ## 兼容说明
 
-原始项目目标框架为 .NET Framework 4.5，本次升级至 4.8，以匹配当前 Windows 10/11 桌面使用场景。正式发布前请先做 Win11 实机外观及服务操作验收。
+原始项目目标框架为 .NET Framework 4.5，本版升级至 4.8，面向 Windows 10/11。
