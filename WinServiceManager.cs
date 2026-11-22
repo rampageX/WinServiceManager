@@ -272,25 +272,39 @@ namespace WinServMgr
                 membershipChanged = true;
             }
 
-            bool filterMembershipChanged = changed.Any(name =>
+            // Visibility can change after a status or display-name update.
+            // Compare against the actual bound membership, not just the new state.
+            bool visibilityChanged = false;
+            if (changed.Count > 0)
             {
-                ServiceEntry entry;
-                return allServices.TryGetValue(name, out entry) &&
-                    (string.IsNullOrWhiteSpace(txtFilter.Text) ||
-                     entry.DisplayName.IndexOf(txtFilter.Text, StringComparison.CurrentCultureIgnoreCase) >= 0);
-            }) && !tbxShowStopped.Checked;
-
-            if (firstScan || membershipChanged || sortValuesChanged || filterMembershipChanged)
-            {
-                RebuildVisibleRows();
+                var visibleNames = new HashSet<string>(
+                    visibleServices.Select(s => s.ServiceName), StringComparer.OrdinalIgnoreCase);
+                string filter = (txtFilter.Text ?? "").Trim();
+                foreach (string name in changed)
+                {
+                    ServiceEntry entry;
+                    if (!allServices.TryGetValue(name, out entry)) continue;
+                    bool shouldShow = (tbxShowStopped.Checked ||
+                        entry.ServiceState != ServiceControllerStatus.Stopped) &&
+                        (filter.Length == 0 ||
+                         entry.ServiceName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
+                         entry.DisplayName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0);
+                    if (shouldShow != visibleNames.Contains(name))
+                    {
+                        visibilityChanged = true;
+                        break;
+                    }
+                }
             }
-            else if (changed.Count > 0)
-            {
-                // Reset only changed bound rows, instead of the complete binding list.
+
+            if (firstScan || membershipChanged || sortValuesChanged || visibilityChanged)
+                RebuildVisibleRows();
+
+            // Even if sorted order stays the same, changed values must be repainted.
+            if (changed.Count > 0)
                 for (int i = 0; i < visibleServices.Count; ++i)
                     if (changed.Contains(visibleServices[i].ServiceName))
                         binding.ResetItem(i);
-            }
             UpdateCountLabel();
         }
 
