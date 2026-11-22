@@ -35,7 +35,7 @@ namespace WinServMgr
             serviceName = name;
             Text = "服务详情  ·  " + name;
             Font = new Font("Microsoft YaHei UI", 9F);
-            StartPosition = FormStartPosition.CenterParent;
+            StartPosition = FormStartPosition.Manual;
             FormBorderStyle = FormBorderStyle.Sizable;
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(800, 690);

@@ -33,6 +33,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./bin/Release/DropdownDismissalSmoke.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify EXE icon and Explorer version metadata
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'bin/Release/WinServiceManager.exe').Path
+          $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+          if ($version.FileVersion -ne '1.1.1.0') { throw "Unexpected file version: $($version.FileVersion)" }
+          if ($version.ProductVersion -ne '1.1.1-preview') { throw "Unexpected product version: $($version.ProductVersion)" }
+          if ($version.FileDescription -ne 'WinServiceManager') { throw "Unexpected description: $($version.FileDescription)" }
+          if ($version.CompanyName -ne 'rampageX') { throw "Unexpected company: $($version.CompanyName)" }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
+          if ($null -eq $icon -or $icon.Width -le 0) { throw 'EXE icon resource missing' }
+          $icon.Dispose()
+          Write-Host "Explorer metadata OK: $($version.FileDescription) / $($version.FileVersion) / $($version.ProductVersion)"
+          Write-Host 'EXE icon resource OK'
       - name: Package portable preview
         shell: pwsh
         run: |

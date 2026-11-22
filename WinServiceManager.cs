@@ -433,11 +433,34 @@ namespace WinServMgr
             e.FormattingApplied = true;
         }
 
+        private void OpenServiceDetails(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return;
+
+            var details = new ServiceDetailsForm(name);
+            // Reuse the main window artwork; the EXE icon uses the same icon.ico.
+            var detailIcon = (Icon)Icon.Clone();
+            details.Icon = detailIcon;
+            details.Disposed += (sender, args) => detailIcon.Dispose();
+
+            // Center on the right half of the parent rather than the desktop.
+            // Clamp to the owner's monitor work area (including multiple displays).
+            Rectangle area = Screen.FromControl(this).WorkingArea;
+            int intendedX = Left + (Width * 3 / 4) - (details.Width / 2);
+            int intendedY = Top + (Height - details.Height) / 2;
+            int x = Math.Max(area.Left, Math.Min(intendedX, area.Right - details.Width));
+            int y = Math.Max(area.Top, Math.Min(intendedY, area.Bottom - details.Height));
+
+            details.StartPosition = FormStartPosition.Manual;
+            details.Location = new Point(x, y);
+            details.Show(this);
+        }
+
         private void GridCellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
             var entry = dgvServicesList.Rows[e.RowIndex].DataBoundItem as ServiceEntry;
-            if (entry != null) new ServiceDetailsForm(entry.ServiceName).Show(this);
+            if (entry != null) OpenServiceDetails(entry.ServiceName);
         }
 
         private void ConfigureServiceContextMenu()
@@ -445,7 +468,7 @@ namespace WinServMgr
             serviceContextMenu.Items.Add("查看详情", null, (sender, args) =>
             {
                 if (!string.IsNullOrEmpty(contextServiceName))
-                    new ServiceDetailsForm(contextServiceName).Show(this);
+                    OpenServiceDetails(contextServiceName);
             });
             serviceContextMenu.Items.Add(new ToolStripSeparator());
             serviceContextMenu.Items.Add("启动", null, btnStartService_Click);

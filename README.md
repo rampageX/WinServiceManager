@@ -22,6 +22,12 @@
 - 修复：打开“启动类型”暗色下拉菜单后点击空白处，`ContextMenuStrip` 在 `Closed` 回调中提前 `Dispose` 导致 `ObjectDisposedException` 闪退；改为控件拥有并重用菜单，控件销毁时才释放。主列表右键菜单也同步修复。
 - 新增 Windows Actions GUI 回归测试：打开、模拟空白点击关闭、重新打开、选择选项、控件销毁资源回收。
 
+## 窗口位置及版本元数据
+
+- 服务详情窗口在主窗口**右半区域**居中打开，并限制在主窗口所在显示器的工作区域内（多显示器可用），不再默认靠左。
+- EXE 的原有 `icon.ico` 与主窗口内嵌资源图标逐字节一致；详情页使用主窗口图标的独立副本。
+- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.1.0、产品版本 1.1.1-preview、公司 rampageX。
+
 ## 运行
 
 Windows 10 / 11，已安装 .NET Framework 4.8。
