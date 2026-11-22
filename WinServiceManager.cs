@@ -428,10 +428,12 @@ namespace WinServMgr
             var row = dgvServicesList.Rows[e.RowIndex];
             if (!row.Selected)
             {
+                // Selecting a new row replaces the selection; right-clicking an
+                // already selected row must preserve all selected services.
                 dgvServicesList.ClearSelection();
+                dgvServicesList.CurrentCell = row.Cells[e.ColumnIndex];
                 row.Selected = true;
             }
-            dgvServicesList.CurrentCell = row.Cells[e.ColumnIndex];
             var entry = row.DataBoundItem as ServiceEntry;
             if (entry == null) return;
 
