@@ -1,16 +1,18 @@
-name: Release WinServiceManager v1.1.1
+name: Release WinServiceManager v1.1.2
 
 on:
   push:
     branches:
       - master
+    paths:
+      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: winservicemanager-release-v1.1.1
+  group: winservicemanager-release-v1.1.2
   cancel-in-progress: false
 
 jobs:
@@ -25,9 +27,9 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_REF -ne 'refs/heads/master') { throw 'Stable release must come from master' }
-          $tag = git ls-remote --tags origin 'refs/tags/v1.1.1'
+          $tag = git ls-remote --tags origin 'refs/tags/v1.1.2'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not [string]::IsNullOrWhiteSpace(($tag | Out-String))) { throw 'Tag v1.1.1 already exists; refusing overwrite' }
+          if (-not [string]::IsNullOrWhiteSpace(($tag | Out-String))) { throw 'Tag v1.1.2 already exists; refusing overwrite' }
       - name: Compile Release
         shell: pwsh
         run: |
@@ -50,13 +52,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & ./bin/Release/StartupGridSmoke.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Regression - settings and favorites
+        shell: pwsh
+        run: |
+          $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework/v4.0.30319/csc.exe'
+          & $csc /nologo /target:exe /out:bin/Release/SettingsFavoritesSmoke.exe /r:bin/Release/WinServiceManager.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.ServiceProcess.dll './Tests\SettingsFavoritesSmoke.cs'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./bin/Release/SettingsFavoritesSmoke.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify EXE identity
         shell: pwsh
         run: |
           $exe = (Resolve-Path 'bin/Release/WinServiceManager.exe').Path
           $version = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
-          if ($version.FileVersion -ne '1.1.1.0') { throw "Unexpected file version $($version.FileVersion)" }
-          if ($version.ProductVersion -ne '1.1.1') { throw "Unexpected product version $($version.ProductVersion)" }
+          if ($version.FileVersion -ne '1.1.2.0') { throw "Unexpected file version $($version.FileVersion)" }
+          if ($version.ProductVersion -ne '1.1.2') { throw "Unexpected product version $($version.ProductVersion)" }
           if ($version.FileDescription -ne 'WinServiceManager') { throw 'Wrong file description' }
           if ($version.CompanyName -ne 'rampageX') { throw 'Wrong company' }
           Add-Type -AssemblyName System.Drawing
@@ -64,13 +74,27 @@ jobs:
           if ($null -eq $icon -or $icon.Width -le 0) { throw 'Missing EXE icon' }
           $icon.Dispose()
           Write-Host "Verified $($version.FileDescription) $($version.FileVersion) $($version.ProductVersion)"
+      - name: Verify embedded UAC elevation manifest
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'bin/Release/WinServiceManager.exe').Path
+          $kits = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Windows Kits\10\bin'
+          $mt = Get-ChildItem -Path "$kits\*\x64\mt.exe" -ErrorAction Stop | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $mt) { throw 'Windows SDK manifest tool not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'WinServiceManager.embedded.manifest'
+          & $mt.FullName "-inputresource:$exe;#1" "-out:$out"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$manifest = Get-Content -LiteralPath $out -Raw
+          $level = $manifest.SelectSingleNode("//*[local-name()='requestedExecutionLevel']")
+          if (-not $level -or $level.level -ne 'requireAdministrator' -or $level.uiAccess -ne 'false') { throw 'Missing or incorrect embedded UAC execution level' }
+          Write-Host 'PASS: embedded EXE manifest requireAdministrator; uiAccess=false'
       - name: Create portable stable ZIP
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force package,dist | Out-Null
           Copy-Item bin/Release/WinServiceManager.exe package/
           Copy-Item README.md, LICENSE package/
-          $zip = 'dist/WinServiceManager_v1.1.1_Stable.zip'
+          $zip = 'dist/WinServiceManager_v1.1.2_Stable.zip'
           Compress-Archive -Path package/* -DestinationPath $zip -Force
           if (-not (Test-Path $zip)) { throw 'Stable package missing' }
           Get-FileHash -Path $zip -Algorithm SHA256 | Format-List
@@ -79,7 +103,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v1.1.1 'dist/WinServiceManager_v1.1.1_Stable.zip' --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title 'WinServiceManager v1.1.1' --notes-file RELEASE_NOTES.md --latest
+          gh release create v1.1.2 'dist/WinServiceManager_v1.1.2_Stable.zip' --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title 'WinServiceManager v1.1.2' --notes-file RELEASE_NOTES.md --latest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          gh release view v1.1.1 --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,assets,url --jq '{tag: .tagName, draft: .isDraft, prerelease: .isPrerelease, assets: [.assets[].name], url: .url}'
+          gh release view v1.1.2 --repo "$env:GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,assets,url --jq '{tag: .tagName, draft: .isDraft, prerelease: .isPrerelease, assets: [.assets[].name], url: .url}'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

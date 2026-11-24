@@ -17,7 +17,7 @@
 - 服务扫描移至后台线程，每 2.5 秒自动刷新；只重绘有变化的行
 - F5 刷新，Ctrl+F 聚焦搜索框
 
-## v1.1.2 预览
+## v1.1.2 正式版
 
 - 启动时通过 EXE 内嵌 UAC Manifest 请求管理员权限（requireAdministrator），无需手动右键以管理员身份运行。取消 UAC 时不启动；不修改 UAC 策略。
 
@@ -42,9 +42,9 @@
 
 ## 窗口位置及版本元数据
 
-- 服务详情窗口在主窗口**右半区域**居中打开，并限制在主窗口所在显示器的工作区域内（多显示器可用），不再默认靠左。
+- 首次打开服务详情窗口默认位于主窗口右半区域；后续恢复已保存的位置和尺寸，自动修正屏幕越界。
 - EXE 的原有 `icon.ico` 与主窗口内嵌资源图标逐字节一致；详情页使用主窗口图标的独立副本。
-- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.1.0、产品版本 1.1.1、公司 rampageX。
+- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.2.0、产品版本 1.1.2、公司 rampageX。
 
 ## 运行
 
@@ -54,7 +54,7 @@ v1.1.1 正式版不自动提权；v1.1.2 起程序启动时通过标准 UAC 机�
 
 服务配置变更通过 Windows 服务控制管理器的 ChangeServiceConfigW / ChangeServiceConfig2W 完成，不直接改注册表。关闭或取消详情窗口不写入更改。修改启动类型不会立即停止或启动运行中的服务；带依赖关系的系统服务不要随意禁用。延迟自动启动由两次 SCM 调用配置，第二步若失败会明确报告，需重新进入详情核对实际配置。
 
-从 [GitHub Releases](https://github.com/rampageX/WinServiceManager/releases) 下载 `WinServiceManager_v1.1.1_Stable.zip`，解压运行 `WinServiceManager.exe`。
+从 [GitHub Releases](https://github.com/rampageX/WinServiceManager/releases) 下载 `WinServiceManager_v1.1.2_Stable.zip`，解压运行 `WinServiceManager.exe`。
 
 ## 源码构建
 
