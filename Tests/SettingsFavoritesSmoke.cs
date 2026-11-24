@@ -63,9 +63,9 @@ internal static class SettingsFavoritesSmoke
                 ExpectRows(main, "aa_test");
                 stoppedFilter.Checked = true;
                 ExpectRows(main, "aa_test", "bb_test");
-                Call(main, "ToggleFavorite", "cc_test");
+                Call(main, "ToggleFavorites", (object)new[] { "cc_test" });
                 ExpectRows(main, "aa_test", "bb_test", "cc_test");
-                Call(main, "ToggleFavorite", "AA_TEST");
+                Call(main, "ToggleFavorites", (object)new[] { "AA_TEST" });
                 ExpectRows(main, "bb_test", "cc_test");
                 stoppedFilter.Checked = false;
                 ExpectRows(main, "cc_test");
@@ -76,7 +76,7 @@ internal static class SettingsFavoritesSmoke
                     new WinServMgr.ServiceEntry("cc_test", "Other favorite", ServiceControllerStatus.Stopped)
                 });
                 ExpectRows(main, "bb_test");
-                Call(main, "ToggleFavorite", "测试=服务%");
+                Call(main, "ToggleFavorites", (object)new[] { "测试=服务%" });
                 favoriteFilter.Checked = false;
                 ExpectRows(main, "aa_test", "bb_test");
                 var settings = Field(main, "settings");
@@ -107,6 +107,89 @@ internal static class SettingsFavoritesSmoke
                     });
                 Check(area.Contains(fit), "Restore off-screen window into available work area");
             }
+            // Use a fresh config for actual bound-grid keyboard/menu tests.
+            string batchPath = Path.Combine(directory, "batch.ini");
+            using (var main = NewForm(batchPath))
+            {
+                // Prevent the real SCM scan from replacing the synthetic fixture.
+                var load = typeof(WinServMgr.MainForm).GetMethod("SMATestTool_Load", Members);
+                main.Load -= (EventHandler)Delegate.CreateDelegate(typeof(EventHandler), main, load);
+                var grid = (DataGridView)Field(main, "dgvServicesList");
+                var menu = (ContextMenuStrip)Field(main, "serviceContextMenu");
+                var favoriteItem = (ToolStripItem)Field(main, "favoriteMenuItem");
+                var fixture = new List<WinServMgr.ServiceEntry> {
+                    new WinServMgr.ServiceEntry("a_one", "Zulu", ServiceControllerStatus.Running),
+                    new WinServMgr.ServiceEntry("b_one", "Alpha", ServiceControllerStatus.Running),
+                    new WinServMgr.ServiceEntry("b_two", "Beta", ServiceControllerStatus.Stopped),
+                    new WinServMgr.ServiceEntry("c_one", "Alpine", ServiceControllerStatus.Running)
+                };
+                main.Show();
+                Application.DoEvents();
+                Call(main, "ApplySnapshot", fixture);
+                Call(main, "RevealFirstSnapshot");
+                typeof(WinServMgr.MainForm).GetField("firstScan", Members).SetValue(main, false);
+                Application.DoEvents();
+
+                grid.CurrentCell = grid.Rows[0].Cells[0];
+                grid.ClearSelection();
+                grid.Rows[0].Selected = true;
+                grid.Rows[1].Selected = true;
+                Call(main, "dgvServicesList_CellMouseClick", grid,
+                    new DataGridViewCellMouseEventArgs(0, 0, 0, 0,
+                        new MouseEventArgs(MouseButtons.Right, 1, 0, 0, 0)));
+                Check(favoriteItem.Text == "收藏服务 (2)", "Multi-selection menu label");
+                favoriteItem.PerformClick();
+                menu.Close();
+                var settings = Field(main, "settings");
+                var favorites = (HashSet<string>)Field(settings, "Favorites");
+                Check(favorites.SetEquals(new[] { "a_one", "b_one" }), "Menu adds all selected");
+                // Mixed selection adds, without inverting existing favorites.
+                Call(main, "ToggleFavorites", (object)new[] { "B_ONE", "b_two" });
+                Check(favorites.SetEquals(new[] { "a_one", "b_one", "b_two" }), "Mixed selection adds only missing");
+                Call(main, "ToggleFavorites", (object)new[] { "b_one", "b_two" });
+                Check(favorites.SetEquals(new[] { "a_one" }), "Remove all selected favorites");
+                using (var restoredForm = NewForm(batchPath))
+                {
+                    var restored = Field(restoredForm, "settings");
+                    Check(((HashSet<string>)Field(restored, "Favorites")).SetEquals(new[] { "a_one" }),
+                        "Batch change persisted");
+                }
+
+                grid.Focus();
+                var key = new KeyEventArgs(Keys.B);
+                Call(main, "GridLetterKeyDown", grid, key);
+                Check(key.Handled && key.SuppressKeyPress &&
+                    ((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_one",
+                    "First B key jumps to first matching visible row");
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.B));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_two",
+                    "Repeated B key jumps to next match");
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.B));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_one",
+                    "Repeat wraps to first match");
+                Check(grid.SelectedRows.Count == 1, "Jump selects one row");
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.Q));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_one",
+                    "Unmatched key does not move selection");
+                var ctrl = new KeyEventArgs(Keys.Control | Keys.A);
+                Call(main, "GridLetterKeyDown", grid, ctrl);
+                Check(!ctrl.Handled, "Ctrl shortcuts unaffected");
+                ((CheckBox)Field(main, "tbxShowStopped")).Checked = false;
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.B));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_one",
+                    "Jump respects visible filter");
+                Call(main, "GridColumnHeaderMouseClick", grid,
+                    new DataGridViewCellMouseEventArgs(1, -1, 0, 0,
+                        new MouseEventArgs(MouseButtons.Left, 1, 0, 0, 0)));
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.A));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "b_one",
+                    "Display-name sorting uses display-name prefix");
+                Call(main, "GridLetterKeyDown", grid, new KeyEventArgs(Keys.A));
+                Check(((WinServMgr.ServiceEntry)grid.CurrentRow.DataBoundItem).ServiceName == "c_one",
+                    "Repeat cycles display-name matches");
+                main.Close();
+            }
+            Console.WriteLine("PASS: batch favorites, mixed selection, menu action, keyboard prefix cycling, visible filters and name column");
             Console.WriteLine("PASS: favorite add/remove, combined filters, refresh membership, INI roundtrip, special paths, window bounds");
             return 0;
         }

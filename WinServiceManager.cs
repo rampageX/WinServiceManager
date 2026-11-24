@@ -26,6 +26,11 @@ namespace WinServMgr
         private Task<List<ServiceEntry>> initialScanTask;
         private readonly ContextMenuStrip serviceContextMenu = DarkTheme.CreateMenu();
         private string contextServiceName;
+        private List<string> contextFavoriteNames = new List<string>();
+        private char lastJumpLetter;
+        private string lastJumpName;
+        private string lastJumpColumn;
+        private bool lastJumpDescending;
         private readonly AppSettings settings;
         private CheckBox favoritesOnlyBox;
         private ToolStripItem favoriteMenuItem, startMenuItem, stopMenuItem, restartMenuItem;
@@ -260,6 +265,7 @@ namespace WinServMgr
             dgvServicesList.ColumnHeaderMouseClick += GridColumnHeaderMouseClick;
             dgvServicesList.CellDoubleClick += GridCellDoubleClick;
             dgvServicesList.CellFormatting += GridCellFormatting;
+            dgvServicesList.KeyDown += GridLetterKeyDown;
         }
 
         public List<string> GetSelectedServices()
@@ -591,7 +597,7 @@ namespace WinServMgr
             });
             favoriteMenuItem = serviceContextMenu.Items.Add("收藏服务", null, (sender, args) =>
             {
-                ToggleFavorite(contextServiceName);
+                ToggleFavorites(contextFavoriteNames);
             });
             serviceContextMenu.Items.Add(new ToolStripSeparator());
             startMenuItem = serviceContextMenu.Items.Add("启动", null, btnStartService_Click);
@@ -616,8 +622,14 @@ namespace WinServMgr
 
             contextServiceName = entry.ServiceName;
             // The same form-owned menu is reused. No disposal from Closed.
-            favoriteMenuItem.Text = settings.Favorites.Contains(contextServiceName)
+            // Capture the selection when the menu opens. A background refresh
+            // may change visible rows before the menu item is clicked.
+            contextFavoriteNames = GetSelectedServices();
+            if (contextFavoriteNames.Count == 0) contextFavoriteNames.Add(contextServiceName);
+            favoriteMenuItem.Text = contextFavoriteNames.All(settings.Favorites.Contains)
                 ? "取消收藏" : "收藏服务";
+            if (contextFavoriteNames.Count > 1)
+                favoriteMenuItem.Text += " (" + contextFavoriteNames.Count + ")";
             startMenuItem.Enabled =
                 !operationBusy && entry.ServiceState == ServiceControllerStatus.Stopped;
             stopMenuItem.Enabled =
@@ -688,13 +700,66 @@ namespace WinServMgr
         private void txtFilter_Enter(object sender, EventArgs e) { }
         private void txtFilter_Leave(object sender, EventArgs e) { }
 
-        private void ToggleFavorite(string name)
+        private void ToggleFavorites(IEnumerable<string> names)
         {
-            if (string.IsNullOrEmpty(name)) return;
-            if (!settings.Favorites.Add(name)) settings.Favorites.Remove(name);
+            var targets = names.Where(n => !string.IsNullOrEmpty(n))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (targets.Length == 0) return;
+            // A mixed selection always adds missing favorites. Remove only
+            // when every selected service is already favorited.
+            if (targets.All(settings.Favorites.Contains))
+                settings.Favorites.ExceptWith(targets);
+            else
+                settings.Favorites.UnionWith(targets);
             RebuildVisibleRows();
             UpdateCountLabel();
             SaveSettings();
+        }
+
+        private void GridLetterKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control || e.Alt || e.KeyCode < Keys.A || e.KeyCode > Keys.Z)
+                return;
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+            JumpToLetter((char)('A' + (int)e.KeyCode - (int)Keys.A));
+        }
+
+        private bool JumpToLetter(char letter)
+        {
+            int count = dgvServicesList.RowCount;
+            if (count == 0) return false;
+            string column = sortColumn == "DisplayName" ? "DisplayName" : "ServiceName";
+            string prefix = char.ToUpperInvariant(letter).ToString();
+            int current = dgvServicesList.CurrentCell == null ? -1 : dgvServicesList.CurrentCell.RowIndex;
+            var currentEntry = current >= 0
+                ? dgvServicesList.Rows[current].DataBoundItem as ServiceEntry : null;
+            bool repeat = currentEntry != null &&
+                char.ToUpperInvariant(letter) == lastJumpLetter &&
+                column == lastJumpColumn && sortDescending == lastJumpDescending &&
+                string.Equals(currentEntry.ServiceName, lastJumpName, StringComparison.OrdinalIgnoreCase);
+            int start = repeat ? (current + 1) % count : 0;
+
+            for (int offset = 0; offset < count; offset++)
+            {
+                int index = (start + offset) % count;
+                var entry = dgvServicesList.Rows[index].DataBoundItem as ServiceEntry;
+                if (entry == null) continue;
+                string name = column == "DisplayName" ? entry.DisplayName : entry.ServiceName;
+                if (string.IsNullOrEmpty(name) ||
+                    !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                var row = dgvServicesList.Rows[index];
+                dgvServicesList.CurrentCell = row.Cells[column];
+                dgvServicesList.ClearSelection();
+                row.Selected = true;
+                if (!row.Displayed) dgvServicesList.FirstDisplayedScrollingRowIndex = index;
+                lastJumpLetter = char.ToUpperInvariant(letter);
+                lastJumpName = entry.ServiceName;
+                lastJumpColumn = column;
+                lastJumpDescending = sortDescending;
+                return true;
+            }
+            return false;
         }
 
         private void FiltersChanged()
