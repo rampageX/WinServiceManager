@@ -65,6 +65,20 @@ jobs:
           $icon.Dispose()
           Write-Host "Explorer metadata OK: $($version.FileDescription) / $($version.FileVersion) / $($version.ProductVersion)"
           Write-Host 'EXE icon resource OK'
+      - name: Verify embedded UAC elevation manifest
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'bin/Release/WinServiceManager.exe').Path
+          $kits = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Windows Kits\10\bin'
+          $mt = Get-ChildItem -Path "$kits\*\x64\mt.exe" -ErrorAction Stop | Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $mt) { throw 'Windows SDK manifest tool not found' }
+          $out = Join-Path $env:RUNNER_TEMP 'WinServiceManager.embedded.manifest'
+          & $mt.FullName "-inputresource:$exe;#1" "-out:$out"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$manifest = Get-Content -LiteralPath $out -Raw
+          $level = $manifest.SelectSingleNode("//*[local-name()='requestedExecutionLevel']")
+          if (-not $level -or $level.level -ne 'requireAdministrator' -or $level.uiAccess -ne 'false') { throw 'Missing or incorrect embedded UAC execution level' }
+          Write-Host 'PASS: embedded EXE manifest requireAdministrator; uiAccess=false'
       - name: Package portable preview
         shell: pwsh
         run: |
