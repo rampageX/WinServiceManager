@@ -17,6 +17,16 @@
 - 服务扫描移至后台线程，每 2.5 秒自动刷新；只重绘有变化的行
 - F5 刷新，Ctrl+F 聚焦搜索框
 
+## v1.1.2 正式版
+
+- 启动时通过 EXE 内嵌 UAC Manifest 请求管理员权限（requireAdministrator），无需手动右键以管理员身份运行。取消 UAC 时不启动；不修改 UAC 策略。
+
+- EXE 同目录 WinServiceManager.ini 保存主窗口和详情窗口的正常位置、尺寸及最大化状态；移除显示器后自动调整到可见工作区。
+- 右键收藏/取消收藏全部选中的服务；混合选择时补齐未收藏项，全部已收藏时统一取消。收藏依据内部服务名称，不因显示名称修改而丢失。
+- 服务列表获得焦点时按 A–Z 快速定位；按名称列或显示名称列排序时按对应名称匹配，状态排序时按服务名称匹配。重复按同一字母循环到下一匹配行，仅定位当前可见服务。
+- 搜索框右侧新增“仅显示收藏的服务”复选框，与“显示已停止的服务”独立组合；两项状态及收藏列表均持久化。
+- 配置在操作或退出窗口时保存，后台自动刷新不写配置。程序目录不可写时无法持久化；手动修改配置请先关闭程序。
+
 ## 启动显示与性能
 
 - 窗体构建阶段即在工作线程启动首次 SCM 服务扫描，与 UI 初始化并行执行。
@@ -32,19 +42,19 @@
 
 ## 窗口位置及版本元数据
 
-- 服务详情窗口在主窗口**右半区域**居中打开，并限制在主窗口所在显示器的工作区域内（多显示器可用），不再默认靠左。
+- 首次打开服务详情窗口默认位于主窗口右半区域；后续恢复已保存的位置和尺寸，自动修正屏幕越界。
 - EXE 的原有 `icon.ico` 与主窗口内嵌资源图标逐字节一致；详情页使用主窗口图标的独立副本。
-- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.1.0、产品版本 1.1.1、公司 rampageX。
+- Windows 资源管理器悬停 EXE / 文件属性包含：文件说明 WinServiceManager、文件版本 1.1.2.0、产品版本 1.1.2、公司 rampageX。
 
 ## 运行
 
 Windows 10 / 11，已安装 .NET Framework 4.8。
 
-查看服务无需管理员权限。启动、停止、重启及修改显示名称、启动类型可能需要以管理员身份运行，程序不会自动提权。
+v1.1.1 正式版不自动提权；v1.1.2 起程序启动时通过标准 UAC 机制请求管理员权限。具体服务仍受 SCM 权限及保护机制约束。
 
 服务配置变更通过 Windows 服务控制管理器的 ChangeServiceConfigW / ChangeServiceConfig2W 完成，不直接改注册表。关闭或取消详情窗口不写入更改。修改启动类型不会立即停止或启动运行中的服务；带依赖关系的系统服务不要随意禁用。延迟自动启动由两次 SCM 调用配置，第二步若失败会明确报告，需重新进入详情核对实际配置。
 
-从 [GitHub Releases](https://github.com/rampageX/WinServiceManager/releases) 下载 `WinServiceManager_v1.1.1_Stable.zip`，解压运行 `WinServiceManager.exe`。
+从 [GitHub Releases](https://github.com/rampageX/WinServiceManager/releases) 下载 `WinServiceManager_v1.1.2_Stable.zip`，解压运行 `WinServiceManager.exe`。
 
 ## 源码构建
 

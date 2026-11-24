@@ -37,6 +37,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -53,6 +54,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DarkTheme.cs" />
+    <Compile Include="AppSettings.cs" />
     <Compile Include="BufferedDataGridView.cs" />
     <Compile Include="DarkStartupDropdown.cs" />
     <Compile Include="ServiceConfiguration.cs" />
@@ -92,6 +94,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="app.manifest" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\DataSources\" />
