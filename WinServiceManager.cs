@@ -26,9 +26,25 @@ namespace WinServMgr
         private Task<List<ServiceEntry>> initialScanTask;
         private readonly ContextMenuStrip serviceContextMenu = DarkTheme.CreateMenu();
         private string contextServiceName;
+        private readonly AppSettings settings;
+        private CheckBox favoritesOnlyBox;
+        private ToolStripItem favoriteMenuItem, startMenuItem, stopMenuItem, restartMenuItem;
+        private string settingsLoadError;
+        private bool saveErrorShown;
 
         public MainForm()
+            : this(System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WinServiceManager.ini"))
         {
+        }
+
+        internal MainForm(string settingsPath)
+        {
+            try { settings = AppSettings.Load(settingsPath); }
+            catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+            {
+                settings = new AppSettings(settingsPath);
+                settingsLoadError = ex.Message;
+            }
             InitializeComponent();
             // Overlap the first SCM enumeration with form/control construction.
             initialScanTask = Task.Run(() => SrvController.Enumerate());
@@ -44,6 +60,30 @@ namespace WinServMgr
             tmrRefreshGrid.Stop();
             UpdateSortGlyph();
             UpdateCountLabel();
+            FormClosed += (sender, args) =>
+            {
+                settings.MainBounds = AppSettings.CaptureBounds(this);
+                if (WindowState != FormWindowState.Minimized)
+                    settings.MainMaximized = WindowState == FormWindowState.Maximized;
+                SaveSettings(false);
+            };
+        }
+
+        private void SaveSettings(bool reportError = true)
+        {
+            try
+            {
+                settings.Save();
+                saveErrorShown = false;
+            }
+            catch (Exception ex) when (ex is System.IO.IOException || ex is UnauthorizedAccessException)
+            {
+                if (reportError && !saveErrorShown && !IsDisposed && !Disposing)
+                {
+                    saveErrorShown = true;
+                    DarkTheme.ShowError(this, "无法保存 WinServiceManager.ini，请检查程序目录写入权限。\r\n" + ex.Message);
+                }
+            }
         }
 
         private void InitializeModernLayout()
@@ -66,11 +106,12 @@ namespace WinServMgr
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
 
             var toolbar = new TableLayoutPanel {
-                Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1,
+                Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1,
                 BackColor = DarkTheme.Surface
             };
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -80,8 +121,9 @@ namespace WinServMgr
                 Margin = new Padding(2, 1, 10, 1)
             };
             txtFilter.Text = "";
-            txtFilter.Margin = new Padding(0, 7, 12, 7);
-            txtFilter.Dock = DockStyle.Fill;
+            txtFilter.Margin = new Padding(0, 0, 14, 0);
+            txtFilter.Dock = DockStyle.None;
+            txtFilter.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             txtFilter.Font = new Font("Microsoft YaHei UI", 9F);
             txtFilter.TextChanged -= txtFilter_TextChanged;
             txtFilter.Enter -= txtFilter_Enter;
@@ -91,18 +133,28 @@ namespace WinServMgr
             tbxShowStopped.Text = "显示已停止的服务";
             tbxShowStopped.AutoSize = true;
             tbxShowStopped.Anchor = AnchorStyles.Left;
-            tbxShowStopped.Margin = new Padding(8, 0, 18, 0);
+            tbxShowStopped.Margin = new Padding(0, 0, 16, 0);
+            tbxShowStopped.Checked = settings.ShowStopped;
+
+            favoritesOnlyBox = new CheckBox {
+                Name = "chkFavoritesOnly", Text = "仅显示收藏的服务",
+                AutoSize = true, Checked = settings.FavoritesOnly,
+                Anchor = AnchorStyles.Left, Margin = new Padding(0, 0, 16, 0)
+            };
+            favoritesOnlyBox.CheckedChanged += (sender, args) => FiltersChanged();
 
             refreshButton = new Button {
                 Name = "btnRefresh", Text = "刷新 (F5)",
-                Size = new Size(110, 32), Margin = new Padding(0, 5, 0, 0)
+                Size = new Size(110, 32), Anchor = AnchorStyles.Right,
+                Margin = Padding.Empty
             };
             refreshButton.Click += async (sender, e) => await RefreshServicesAsync();
 
             toolbar.Controls.Add(filterLabel, 0, 0);
             toolbar.Controls.Add(txtFilter, 1, 0);
-            toolbar.Controls.Add(tbxShowStopped, 2, 0);
-            toolbar.Controls.Add(refreshButton, 3, 0);
+            toolbar.Controls.Add(favoritesOnlyBox, 2, 0);
+            toolbar.Controls.Add(tbxShowStopped, 3, 0);
+            toolbar.Controls.Add(refreshButton, 4, 0);
 
             dgvServicesList.Dock = DockStyle.Fill;
             dgvServicesList.Margin = new Padding(0);
@@ -221,6 +273,9 @@ namespace WinServMgr
 
         private async void SMATestTool_Load(object sender, EventArgs e)
         {
+            AppSettings.RestoreWindow(this, settings.MainBounds, settings.MainMaximized, Bounds);
+            if (!string.IsNullOrEmpty(settingsLoadError))
+                DarkTheme.ShowError(this, "读取 WinServiceManager.ini 失败，使用默认设置。\r\n" + settingsLoadError);
             await RefreshServicesAsync();
             if (!IsDisposed) tmrRefreshGrid.Start();
         }
@@ -337,11 +392,7 @@ namespace WinServMgr
                 {
                     ServiceEntry entry;
                     if (!allServices.TryGetValue(name, out entry)) continue;
-                    bool shouldShow = (tbxShowStopped.Checked ||
-                        entry.ServiceState != ServiceControllerStatus.Stopped) &&
-                        (filter.Length == 0 ||
-                         entry.ServiceName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
-                         entry.DisplayName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0);
+                    bool shouldShow = MatchesFilter(entry, filter);
                     if (shouldShow != visibleNames.Contains(name))
                     {
                         visibilityChanged = true;
@@ -361,14 +412,19 @@ namespace WinServMgr
             UpdateCountLabel();
         }
 
-        private IEnumerable<ServiceEntry> FilteredAndSorted()
+        private bool MatchesFilter(ServiceEntry entry, string filter)
         {
-            string filter = (txtFilter.Text ?? "").Trim();
-            IEnumerable<ServiceEntry> query = allServices.Values.Where(entry =>
+            return (!favoritesOnlyBox.Checked || settings.Favorites.Contains(entry.ServiceName)) &&
                 (tbxShowStopped.Checked || entry.ServiceState != ServiceControllerStatus.Stopped) &&
                 (filter.Length == 0 ||
                  entry.ServiceName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0 ||
-                 entry.DisplayName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0));
+                 entry.DisplayName.IndexOf(filter, StringComparison.CurrentCultureIgnoreCase) >= 0);
+        }
+
+        private IEnumerable<ServiceEntry> FilteredAndSorted()
+        {
+            string filter = (txtFilter.Text ?? "").Trim();
+            IEnumerable<ServiceEntry> query = allServices.Values.Where(entry => MatchesFilter(entry, filter));
 
             Func<ServiceEntry, string> key = sortColumn == "DisplayName"
                 ? (Func<ServiceEntry, string>)(s => s.DisplayName ?? "")
@@ -507,6 +563,15 @@ namespace WinServMgr
 
             details.StartPosition = FormStartPosition.Manual;
             details.Location = new Point(x, y);
+            details.Load += (sender, args) => AppSettings.RestoreWindow(details,
+                settings.DetailsBounds, settings.DetailsMaximized, details.Bounds);
+            details.FormClosed += (sender, args) =>
+            {
+                settings.DetailsBounds = AppSettings.CaptureBounds(details);
+                if (details.WindowState != FormWindowState.Minimized)
+                    settings.DetailsMaximized = details.WindowState == FormWindowState.Maximized;
+                SaveSettings(false);
+            };
             details.Show(this);
         }
 
@@ -524,10 +589,14 @@ namespace WinServMgr
                 if (!string.IsNullOrEmpty(contextServiceName))
                     OpenServiceDetails(contextServiceName);
             });
+            favoriteMenuItem = serviceContextMenu.Items.Add("收藏服务", null, (sender, args) =>
+            {
+                ToggleFavorite(contextServiceName);
+            });
             serviceContextMenu.Items.Add(new ToolStripSeparator());
-            serviceContextMenu.Items.Add("启动", null, btnStartService_Click);
-            serviceContextMenu.Items.Add("停止", null, btnStopService_Click);
-            serviceContextMenu.Items.Add("重启", null, btnRestartService_Click);
+            startMenuItem = serviceContextMenu.Items.Add("启动", null, btnStartService_Click);
+            stopMenuItem = serviceContextMenu.Items.Add("停止", null, btnStopService_Click);
+            restartMenuItem = serviceContextMenu.Items.Add("重启", null, btnRestartService_Click);
         }
 
         private void dgvServicesList_CellMouseClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -547,11 +616,13 @@ namespace WinServMgr
 
             contextServiceName = entry.ServiceName;
             // The same form-owned menu is reused. No disposal from Closed.
-            serviceContextMenu.Items[2].Enabled =
+            favoriteMenuItem.Text = settings.Favorites.Contains(contextServiceName)
+                ? "取消收藏" : "收藏服务";
+            startMenuItem.Enabled =
                 !operationBusy && entry.ServiceState == ServiceControllerStatus.Stopped;
-            serviceContextMenu.Items[3].Enabled =
+            stopMenuItem.Enabled =
                 !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
-            serviceContextMenu.Items[4].Enabled =
+            restartMenuItem.Enabled =
                 !operationBusy && entry.ServiceState == ServiceControllerStatus.Running;
             serviceContextMenu.Show(dgvServicesList, dgvServicesList.PointToClient(Cursor.Position));
         }
@@ -617,11 +688,28 @@ namespace WinServMgr
         private void txtFilter_Enter(object sender, EventArgs e) { }
         private void txtFilter_Leave(object sender, EventArgs e) { }
 
-        private void tbxShowStopped_CheckedChanged(object sender, EventArgs e)
+        private void ToggleFavorite(string name)
         {
-            if (countLabel == null) return;
+            if (string.IsNullOrEmpty(name)) return;
+            if (!settings.Favorites.Add(name)) settings.Favorites.Remove(name);
             RebuildVisibleRows();
             UpdateCountLabel();
+            SaveSettings();
+        }
+
+        private void FiltersChanged()
+        {
+            if (countLabel == null || favoritesOnlyBox == null) return;
+            settings.ShowStopped = tbxShowStopped.Checked;
+            settings.FavoritesOnly = favoritesOnlyBox.Checked;
+            RebuildVisibleRows();
+            UpdateCountLabel();
+            SaveSettings();
+        }
+
+        private void tbxShowStopped_CheckedChanged(object sender, EventArgs e)
+        {
+            FiltersChanged();
         }
 
         private async void tmrRefreshGrid_Tick(object sender, EventArgs e)
